@@ -1,0 +1,33 @@
+package httptransport
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httputil"
+)
+
+func NewLoggingClient() *http.Client {
+	return &http.Client{
+		Transport: &loggingTransport{http.DefaultTransport},
+	}
+}
+
+// Logging transport
+type loggingTransport struct {
+	transport http.RoundTripper
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqDump, _ := httputil.DumpRequestOut(req, true)
+	fmt.Printf("Request:\n%s\n\n", reqDump)
+
+	resp, err := t.transport.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+
+	respDump, _ := httputil.DumpResponse(resp, true)
+	fmt.Printf("Response:\n%s\n\n", respDump)
+
+	return resp, err
+}
