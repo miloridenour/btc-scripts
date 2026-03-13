@@ -14,7 +14,9 @@ import (
 	"github.com/miloridenour/vsc-scripts/packages/inputconfig"
 )
 
-const storagePath = "last_height"
+const storageDir = "last-height"
+const storageFile = "last_height"
+const storagePath = storageDir + "/" + storageFile
 
 type BlockSeedInput struct {
 	BlockHeader string `json:"block_header"`
@@ -192,6 +194,7 @@ func main() {
 
 	if *isInit {
 		inputconfig.SaveConfig(config)
+		setLastHeight(0)
 		return
 	}
 

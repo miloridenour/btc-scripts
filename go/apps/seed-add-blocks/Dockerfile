@@ -2,8 +2,6 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY --from=hivego . /hivego/
-
 COPY . .
 RUN go build -o /seed-add-blocks ./apps/seed-add-blocks
 
