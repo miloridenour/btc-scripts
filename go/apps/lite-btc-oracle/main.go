@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -184,8 +185,13 @@ func main() {
 		"Which bitcoin network to fetch blocks for: testnet | testnet4 | mainnet",
 	)
 	seed := flag.Int("seed", 0, `Block height at which to seed the. Use -1 for latest.`)
-	createKey := flag.Bool("create_key", false, "Create key pair.")
-	maxBlocks := flag.Uint64("max_blocks", 64, "Maxiumum blocks to be added.")
+	createKey := flag.Bool("create-key", false, "Create key pair.")
+	hardStopBlocks := flag.Uint64(
+		"hard-stop-after-blocks",
+		math.MaxUint64,
+		"Maxiumum blocks to be added before terminating script (usually don't use).",
+	)
+	blocksPerTx := flag.Int("blocks-per-tx", 64, "Maxiumum blocks to be added per transaction.")
 	flag.Parse()
 
 	config := Config{}
@@ -285,7 +291,7 @@ func main() {
 		LatestFee: 1,
 	}
 
-	for i := uint64(0); i < *maxBlocks; i++ {
+	for i := uint64(0); i < *hardStopBlocks; i++ {
 		hash, status, err := mempoolClient.GetBlockHashAtHeight(blockHeight)
 		if status == http.StatusNotFound {
 			fmt.Println("No new block.")
@@ -303,7 +309,7 @@ func main() {
 		addBlocksInput.Blocks += string(blockHeader)
 		blockHeight++
 
-		if len(addBlocksInput.Blocks) > 4000 {
+		if len(addBlocksInput.Blocks) >= *blocksPerTx {
 			endCycle(&addBlocksInput, blockHeight)
 			continue
 		}

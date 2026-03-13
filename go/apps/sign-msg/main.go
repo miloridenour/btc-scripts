@@ -9,13 +9,13 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/miloridenour/vsc-scripts/packages/httptransport"
 	"github.com/miloridenour/vsc-scripts/packages/mempool"
 	"github.com/miloridenour/vsc-scripts/packages/transactions"
-	"github.com/tinylib/msgp/msgp"
 )
 
 type SignedInput struct {
@@ -29,11 +29,24 @@ type Output struct {
 	Signatures []SignedInput  `json:"signatures"`
 }
 
+func isHex(s string) bool {
+	if len(s) == 0 || len(s)%2 != 0 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
 	keyFlag := flag.String("key", "", "private key hex (required)")
 	broadcast := flag.Bool("broadcast", false, "attach signatures to the transaction and broadcast")
 	network := flag.String("network", "testnet4", "bitcoin network (mainnet, testnet, testnet4)")
 	inputFile := flag.String("file", "", "read msgpack from file instead of stdin")
+	outputFile := flag.String("o", "", "write JSON output to file instead of stdout")
 	flag.Parse()
 
 	if *keyFlag == "" {
@@ -66,8 +79,22 @@ func main() {
 		reader = os.Stdin
 	}
 
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		log.Fatalf("error reading input: %s", err)
+	}
+
+	// Support hex-encoded input (e.g. files produced by the Go tooling)
+	trimmed := strings.TrimSpace(string(raw))
+	if isHex(trimmed) {
+		raw, err = hex.DecodeString(trimmed)
+		if err != nil {
+			log.Fatalf("error hex-decoding input: %s", err)
+		}
+	}
+
 	var signingData SigningData
-	err := msgp.Decode(reader, &signingData)
+	_, err = signingData.UnmarshalMsg(raw)
 	if err != nil {
 		log.Fatalf("error decoding msgpack: %s", err)
 	}
@@ -128,5 +155,12 @@ func main() {
 		log.Fatalf("error marshalling output: %s", err)
 	}
 
-	fmt.Println(string(out))
+	if *outputFile != "" {
+		err = os.WriteFile(*outputFile, append(out, '\n'), 0644)
+		if err != nil {
+			log.Fatalf("error writing output file: %s", err)
+		}
+	} else {
+		fmt.Println(string(out))
+	}
 }

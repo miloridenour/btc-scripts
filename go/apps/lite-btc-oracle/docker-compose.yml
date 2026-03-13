@@ -3,7 +3,6 @@ services:
     build:
       context: ../../
       dockerfile: apps/lite-btc-oracle/Dockerfile
-    command: ["-network", "testnet4", "-max_blocks", "128"]
     container_name: lite-btc-devnet-oracle
     volumes:
       - ./data/devnet:/app/data
