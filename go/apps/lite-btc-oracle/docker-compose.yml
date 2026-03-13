@@ -1,0 +1,16 @@
+services:
+  seed-add-blocks:
+    build:
+      context: ../../
+      dockerfile: apps/seed-add-blocks/Dockerfile
+    command: ["-network", "testnet4", "-max_blocks", "128"]
+    cointainer-name: lite-btc-devnet-oracle
+    volumes:
+      - ./data/devnet:/app/data
+      - ./data/devnet/last-height:/app/last-height
+    networks:
+      - haf
+
+networks:
+  haf:
+    external: true
