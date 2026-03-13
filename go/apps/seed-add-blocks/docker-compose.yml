@@ -3,8 +3,6 @@ services:
     build:
       context: ../../
       dockerfile: apps/seed-add-blocks/Dockerfile
-      additional_contexts:
-        hivego: /home/milo/Documents/vsc/hivego
     command: ["-network", "testnet4", "-max_blocks", "128"]
     volumes:
       - ./data/devnet:/app/data
