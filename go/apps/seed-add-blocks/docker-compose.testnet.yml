@@ -6,4 +6,3 @@ services:
     volumes:
       - ./data/testnet:/app/data
       - ./data/testnet/last-height:/app/last-height
-    restart: unless-stopped

@@ -6,10 +6,9 @@ services:
     command: ["-network", "testnet4", "-max_blocks", "128"]
     volumes:
       - ./data/devnet:/app/data
-      - ./last_height:/app/last_height
+      - ./data/devnet/last-height:/app/last-height
     networks:
       - haf
-    restart: unless-stopped
 
 networks:
   haf:
