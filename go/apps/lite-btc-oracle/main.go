@@ -215,7 +215,8 @@ func main() {
 	if *createKey {
 		err := callcontract.CallContract(hiveConfig, []byte("{}"), "createKeyPair")
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
+			fmt.Fprintln(os.Stderr, "createKeyPair failed:", err.Error())
+			os.Exit(1)
 		}
 		return
 	}
@@ -227,32 +228,32 @@ func main() {
 		if *seed < 0 {
 			latestHeightString, status, err := mempoolClient.GetLatestBlockHeight()
 			if status != http.StatusOK {
-				fmt.Fprintln(os.Stderr, "Could not fetch block.")
-				return
+				fmt.Fprintln(os.Stderr, "could not fetch latest block height: status", status)
+				os.Exit(1)
 			} else if err != nil {
-				fmt.Fprintln(os.Stderr, err.Error())
-				return
+				fmt.Fprintln(os.Stderr, "could not fetch latest block height:", err.Error())
+				os.Exit(1)
 			}
 			latestHeight, err := strconv.ParseUint(latestHeightString, 10, 32)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, err.Error())
-				return
+				fmt.Fprintln(os.Stderr, "could not parse latest block height:", err.Error())
+				os.Exit(1)
 			}
 			blockHeight = uint32(latestHeight)
 		}
 		blockHash, status, err := mempoolClient.GetBlockHashAtHeight(blockHeight)
 		if status != http.StatusOK {
-			fmt.Fprintln(os.Stderr, "Could not fetch block.")
-			return
+			fmt.Fprintln(os.Stderr, "could not fetch block hash at height", blockHeight, ": status", status)
+			os.Exit(1)
 		} else if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			return
+			fmt.Fprintln(os.Stderr, "could not fetch block hash at height", blockHeight, ":", err.Error())
+			os.Exit(1)
 		}
 
 		header, err := mempoolClient.GetBlockHeader(blockHash)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error getting block header:", err.Error())
-			return
+			os.Exit(1)
 		}
 		seedBlocksInput := BlockSeedInput{
 			BlockHeight: blockHeight,
@@ -260,15 +261,15 @@ func main() {
 		}
 		jsonPayload, err := json.Marshal(seedBlocksInput)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			return
+			fmt.Fprintln(os.Stderr, "error marshaling seed payload:", err.Error())
+			os.Exit(1)
 		}
 		err = callcontract.CallContract(hiveConfig, jsonPayload, "seedBlocks")
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-		} else {
-			setLastHeight(blockHeight)
+			fmt.Fprintln(os.Stderr, "seedBlocks contract call failed:", err.Error())
+			os.Exit(1)
 		}
+		setLastHeight(blockHeight)
 		return
 	}
 
@@ -308,5 +309,6 @@ func main() {
 		}
 	}
 
+	fmt.Println("max_blocks limit reached, exiting")
 	endCycle(&addBlocksInput, blockHeight, true)
 }
