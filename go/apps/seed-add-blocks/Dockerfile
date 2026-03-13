@@ -5,8 +5,6 @@ WORKDIR /app
 COPY --from=hivego . /hivego/
 
 COPY . .
-RUN go mod edit -replace github.com/vsc-eco/hivego=/hivego && go mod download
-
 RUN go build -o /seed-add-blocks ./apps/seed-add-blocks
 
 FROM alpine:3.21
