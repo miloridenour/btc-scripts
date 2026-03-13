@@ -1,10 +1,10 @@
 services:
-  seed-add-blocks:
+  lite-btc-oracle:
     build:
       context: ../../
-      dockerfile: apps/seed-add-blocks/Dockerfile
+      dockerfile: apps/lite-btc-oracle/Dockerfile
     command: ["-network", "testnet4", "-max_blocks", "128"]
-    cointainer-name: lite-btc-devnet-oracle
+    container_name: lite-btc-devnet-oracle
     volumes:
       - ./data/devnet:/app/data
       - ./data/devnet/last-height:/app/last-height

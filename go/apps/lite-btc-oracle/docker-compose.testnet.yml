@@ -1,9 +1,9 @@
 services:
-  seed-add-blocks:
+  lite-btc-oracle:
     build:
       context: ../../
-      dockerfile: apps/seed-add-blocks/Dockerfile
+      dockerfile: apps/lite-btc-oracle/Dockerfile
     volumes:
       - ./data/testnet:/app/data
       - ./data/testnet/last-height:/app/last-height
-    cointainer-name: lite-btc-testet-oracle
+    container_name: lite-btc-testet-oracle

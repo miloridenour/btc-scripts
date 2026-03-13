@@ -134,7 +134,7 @@ func endCycle(input *AddBlocksInput, blockHeight uint32, nosleep ...bool) {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return
 		}
-		err = callcontract.CallContract(hiveConfig, jsonPayload, "addBlocks")
+		err = callcontract.CallContract(hiveConfig, jsonPayload, "addBlocks", 10000)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
