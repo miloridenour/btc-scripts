@@ -5,16 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
-	"vsc-node/modules/common"
-	"vsc-node/modules/hive/streamer"
-
 	"github.com/miloridenour/vsc-scripts/packages/callcontract"
+	"github.com/miloridenour/vsc-scripts/packages/inputconfig"
 )
 
 const storagePath = "last_height"
@@ -30,6 +27,7 @@ type AddBlocksInput struct {
 }
 
 const MempoolTestNetBase = "https://mempool.space/testnet/api"
+const MempoolTestNet4Base = "https://mempool.space/testnet4/api"
 const MempoolBase = "https://mempool.space/api"
 
 type MempoolClient struct {
@@ -37,11 +35,23 @@ type MempoolClient struct {
 	client  *http.Client
 }
 
+type Config struct {
+	HiveActiveKey string `json:"HiveActiveKey"`
+	HiveUsername  string `json:"HiveUsername"`
+	HiveURI       string `json:"HiveURI"`
+	HiveChainID   string `json:"HiveChainID"`
+	VscNetID      string `json:"VscNetID"`
+	ContractID    string `json:"ContractID"`
+}
+
 func NewMempoolClient(network *string) *MempoolClient {
 	var mempoolURL string
-	if *network == "testnet" {
+	switch *network {
+	case "testnet":
 		mempoolURL = MempoolTestNetBase
-	} else {
+	case "testnet4":
+		mempoolURL = MempoolTestNet4Base
+	default:
 		mempoolURL = MempoolBase
 	}
 	return &MempoolClient{
@@ -113,6 +123,8 @@ func (m *MempoolClient) GetBlockHeader(hash string) ([]byte, error) {
 	return rawBytes, nil
 }
 
+var hiveConfig callcontract.HiveConfig
+
 func endCycle(input *AddBlocksInput, blockHeight uint32, nosleep ...bool) {
 	if len(input.Blocks) > 0 {
 		jsonPayload, err := json.Marshal(input)
@@ -120,7 +132,7 @@ func endCycle(input *AddBlocksInput, blockHeight uint32, nosleep ...bool) {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return
 		}
-		err = callcontract.CallContract(jsonPayload, "add_blocks")
+		err = callcontract.CallContract(hiveConfig, jsonPayload, "addBlocks")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
@@ -164,23 +176,41 @@ func gracefulShutdown(height uint32) {
 
 func main() {
 	isInit := flag.Bool("init", false, "Generate credentials config files")
-	network := flag.String("network", "testnet", "Which bitcoin network to fetch blocks for: testnet | mainnet")
+	network := flag.String(
+		"network",
+		"testnet4",
+		"Which bitcoin network to fetch blocks for: testnet | testnet4 | mainnet",
+	)
 	seed := flag.Int("seed", 0, `Block height at which to seed the. Use -1 for latest.`)
 	createKey := flag.Bool("create_key", false, "Create key pair.")
-	maxBlocks := flag.Uint64("max_blocks", math.MaxUint64, "Maxiumum blocks to be added.")
+	maxBlocks := flag.Uint64("max_blocks", 64, "Maxiumum blocks to be added.")
 	flag.Parse()
 
+	config := Config{}
+
+	inputconfig.LoadConfig(&config)
+
 	if *isInit {
-		identityConfig := common.NewIdentityConfig()
-		identityConfig.Init()
-		hiveConfig := streamer.NewHiveConfig()
-		hiveConfig.Init()
-		fmt.Println("Identity config created.")
+		inputconfig.SaveConfig(config)
 		return
 	}
 
+	if config.HiveActiveKey == "" || config.HiveUsername == "" || config.HiveURI == "" {
+		fmt.Fprintln(os.Stderr, "config not initialized")
+		os.Exit(1)
+	}
+
+	hiveConfig = callcontract.HiveConfig{
+		ActiveKey:  config.HiveActiveKey,
+		Username:   config.HiveUsername,
+		URI:        config.HiveURI,
+		ChainID:    config.HiveChainID,
+		VscNetID:   config.VscNetID,
+		ContractID: config.ContractID,
+	}
+
 	if *createKey {
-		err := callcontract.CallContract([]byte("{}"), "create_key_pair")
+		err := callcontract.CallContract(hiveConfig, []byte("{}"), "createKeyPair")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
@@ -230,7 +260,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return
 		}
-		err = callcontract.CallContract(jsonPayload, "seed_blocks")
+		err = callcontract.CallContract(hiveConfig, jsonPayload, "seedBlocks")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 		} else {

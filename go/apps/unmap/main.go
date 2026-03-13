@@ -10,8 +10,11 @@ import (
 )
 
 type unmapConfig struct {
-	Amount  int64  `json:"amount"`
-	Address string `json:"recipient_btc_address"`
+	Amount        int64  `json:"amount"`
+	Address       string `json:"recipient_btc_address"`
+	HiveActiveKey string `json:"HiveActiveKey"`
+	HiveUsername  string `json:"HiveUsername"`
+	HiveURI       string `json:"HiveURI"`
 }
 
 func main() {
@@ -25,12 +28,23 @@ func main() {
 		log.Fatalf("error loading config: %s", err.Error())
 	}
 
-	txJson, err := json.Marshal(cfg)
+	hiveConfig := callcontract.HiveConfig{
+		ActiveKey: cfg.HiveActiveKey,
+		Username:  cfg.HiveUsername,
+		URI:       cfg.HiveURI,
+	}
+
+	txPayload := struct {
+		Amount  int64  `json:"amount"`
+		Address string `json:"recipient_btc_address"`
+	}{cfg.Amount, cfg.Address}
+
+	txJson, err := json.Marshal(txPayload)
 	if err != nil {
 		log.Fatalf("error marshalling input: %s", err.Error())
 	}
 
-	err = callcontract.CallContract(txJson, "unmap", 10000)
+	err = callcontract.CallContract(hiveConfig, txJson, "unmap", 10000)
 	if err != nil {
 		log.Fatalf("error calling contract: %s", err.Error())
 	}

@@ -29,7 +29,7 @@ func main() {
 	noBroadcast := flag.Bool("nobroadcast", false, "prevents transaction from being broadcast to the bitcoin network")
 	flag.Parse()
 
-	network := &chaincfg.TestNet3Params
+	network := &chaincfg.TestNet4Params
 
 	var signerConfig signerConfig
 	err := inputconfig.LoadConfig(&signerConfig)

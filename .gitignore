@@ -2,3 +2,4 @@ config.json
 data
 node_modules
 .env
+bin

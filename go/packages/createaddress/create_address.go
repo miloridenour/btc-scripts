@@ -98,7 +98,7 @@ func CreateMultipleExamples() {
 		funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 		fmt.Printf("Function: %s\n", funcName)
 		// For testnet
-		address, _, err := fn(pubKey, tagBytes, &chaincfg.TestNet3Params)
+		address, _, err := fn(pubKey, tagBytes, &chaincfg.TestNet4Params)
 		if err != nil {
 			panic(err)
 		}

@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("error loading config: %s", err.Error())
 	}
 
-	network := &chaincfg.TestNet3Params
+	network := &chaincfg.TestNet4Params
 
 	var tag []byte
 	if len(keyConfig.Instruction) > 0 {

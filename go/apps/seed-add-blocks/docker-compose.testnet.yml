@@ -1,0 +1,11 @@
+services:
+  seed-add-blocks:
+    build:
+      context: ../../
+      dockerfile: apps/seed-add-blocks/Dockerfile
+      additional_contexts:
+        hivego: /home/milo/Documents/vsc/hivego
+    volumes:
+      - ./data/testnet:/app/data
+      - ./data/testnet/last_height:/app/last_height
+    restart: unless-stopped
