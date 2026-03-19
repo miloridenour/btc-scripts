@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/miloridenour/vsc-scripts/packages/callcontract"
@@ -128,6 +129,108 @@ func (m *MempoolClient) GetBlockHeader(hash string) ([]byte, error) {
 
 var hiveConfig callcontract.HiveConfig
 
+type OracleControl struct {
+	mu          sync.Mutex
+	running     bool
+	blockHeight uint32
+	wake        chan struct{}
+}
+
+func NewOracleControl(startHeight uint32) *OracleControl {
+	return &OracleControl{
+		running:     true,
+		blockHeight: startHeight,
+		wake:        make(chan struct{}, 1),
+	}
+}
+
+func (oc *OracleControl) IsRunning() bool {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	return oc.running
+}
+
+func (oc *OracleControl) Stop() {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	oc.running = false
+}
+
+func (oc *OracleControl) Start() {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	oc.running = true
+	select {
+	case oc.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (oc *OracleControl) GetHeight() uint32 {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	return oc.blockHeight
+}
+
+func (oc *OracleControl) SetHeight(h uint32) {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	oc.blockHeight = h
+	setLastHeight(h)
+}
+
+func startControlServer(oc *OracleControl, port int) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		oc.Stop()
+		fmt.Fprintln(w, "stopped")
+	})
+
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		oc.Start()
+		fmt.Fprintln(w, "started")
+	})
+
+	mux.HandleFunc("/set-height", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Height uint32 `json:"height"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json body", http.StatusBadRequest)
+			return
+		}
+		oc.SetHeight(body.Height)
+		fmt.Fprintf(w, "height set to %d\n", body.Height)
+	})
+
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"running": oc.IsRunning(),
+			"height":  oc.GetHeight(),
+		})
+	})
+
+	addr := fmt.Sprintf(":%d", port)
+	fmt.Println("control server listening on", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		fmt.Fprintln(os.Stderr, "control server error:", err)
+	}
+}
+
 func endCycle(input *AddBlocksInput, blockHeight uint32, nosleep ...bool) {
 	if len(input.Blocks) > 0 {
 		jsonPayload, err := json.Marshal(input)
@@ -192,6 +295,7 @@ func main() {
 		"Maxiumum blocks to be added before terminating script (usually don't use).",
 	)
 	blocksPerTx := flag.Int("blocks-per-tx", 64, "Maxiumum blocks to be added per transaction.")
+	controlPort := flag.Int("port", 8080, "Port for the HTTP control server.")
 	flag.Parse()
 
 	config := Config{}
@@ -288,12 +392,21 @@ func main() {
 		blockHeight = height + 1
 	}
 
+	oc := NewOracleControl(blockHeight)
+	go startControlServer(oc, *controlPort)
+
 	addBlocksInput := AddBlocksInput{
 		LatestFee: 1,
 	}
 
 	blocksInTx := 0
 	for i := uint64(0); i < *hardStopBlocks; i++ {
+		for !oc.IsRunning() {
+			fmt.Println("Paused, waiting for start...")
+			<-oc.wake
+		}
+		blockHeight = oc.GetHeight()
+
 		hash, status, err := mempoolClient.GetBlockHashAtHeight(blockHeight)
 		if status == http.StatusNotFound {
 			fmt.Println("No new block.")
@@ -311,6 +424,7 @@ func main() {
 		}
 		addBlocksInput.Blocks += string(blockHeader)
 		blockHeight++
+		oc.SetHeight(blockHeight)
 		blocksInTx++
 
 		if blocksInTx >= *blocksPerTx {

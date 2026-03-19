@@ -6,4 +6,6 @@ services:
     volumes:
       - ./data/testnet:/app/data
       - ./data/testnet/last-height:/app/last-height
+    ports:
+      - "8080:8080"
     container_name: lite-btc-testet-oracle
