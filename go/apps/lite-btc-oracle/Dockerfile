@@ -14,4 +14,4 @@ COPY --from=builder /lite-btc-oracle /usr/local/bin/lite-btc-oracle
 WORKDIR /app
 
 ENTRYPOINT ["lite-btc-oracle"]
-CMD ["-network", "testnet4"]
+CMD ["-network", "testnet"]

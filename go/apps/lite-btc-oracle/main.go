@@ -228,6 +228,7 @@ func main() {
 	}
 
 	mempoolClient := NewMempoolClient(network)
+	fmt.Println("using btc api:", mempoolClient.baseURL)
 
 	if *seed != 0 {
 		blockHeight := uint32(*seed)
@@ -291,11 +292,13 @@ func main() {
 		LatestFee: 1,
 	}
 
+	blocksInTx := 0
 	for i := uint64(0); i < *hardStopBlocks; i++ {
 		hash, status, err := mempoolClient.GetBlockHashAtHeight(blockHeight)
 		if status == http.StatusNotFound {
 			fmt.Println("No new block.")
 			endCycle(&addBlocksInput, blockHeight)
+			blocksInTx = 0
 			continue
 		} else if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -308,9 +311,11 @@ func main() {
 		}
 		addBlocksInput.Blocks += string(blockHeader)
 		blockHeight++
+		blocksInTx++
 
-		if len(addBlocksInput.Blocks) >= *blocksPerTx {
+		if blocksInTx >= *blocksPerTx {
 			endCycle(&addBlocksInput, blockHeight)
+			blocksInTx = 0
 			continue
 		}
 	}
