@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/miloridenour/vsc-scripts/packages/httptransport"
 	"github.com/miloridenour/vsc-scripts/packages/mempool"
@@ -51,19 +50,6 @@ func main() {
 
 	if *keyFlag == "" {
 		log.Fatal("private key is required (-key)")
-	}
-
-	// Select network params
-	var netParams *chaincfg.Params
-	switch *network {
-	case "mainnet":
-		netParams = &chaincfg.MainNetParams
-	case "testnet":
-		netParams = &chaincfg.TestNet3Params
-	case "testnet4":
-		netParams = &chaincfg.TestNet4Params
-	default:
-		log.Fatalf("unknown network: %s", *network)
 	}
 
 	// Read msgpack input
@@ -140,9 +126,8 @@ func main() {
 		}
 		output.RawTx = hex.EncodeToString(buf.Bytes())
 
-		_ = netParams // network used for broadcast endpoint selection
 		loggingClient := httptransport.NewLoggingClient()
-		mempoolClient := mempool.NewMempoolClient(loggingClient)
+		mempoolClient := mempool.NewMempoolClient(loggingClient, mempool.BaseURLForNetwork(*network))
 		err = mempoolClient.PostTx(output.RawTx)
 		if err != nil {
 			log.Fatalf("error broadcasting transaction: %s", err)

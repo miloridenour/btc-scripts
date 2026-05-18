@@ -81,6 +81,54 @@ func CreateP2WSHAddress(pubKeyHex string, tag []byte, network *chaincfg.Params) 
 	return address, script, nil
 }
 
+// CreateP2WSHAddressWithBackup creates a P2WSH address from a script with primary and backup spending paths:
+//
+//	OP_IF <primaryPubKey> OP_CHECKSIGVERIFY <tag>
+//	OP_ELSE <csvBlocks> OP_CHECKSEQUENCEVERIFY OP_DROP <backupPubKey> OP_CHECKSIG OP_ENDIF
+func CreateP2WSHAddressWithBackup(
+	primaryPubKeyHex string,
+	backupPubKeyHex string,
+	tag []byte,
+	csvBlocks int64,
+	network *chaincfg.Params,
+) (string, []byte, error) {
+	primaryPubKeyBytes, err := hex.DecodeString(primaryPubKeyHex)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid primary pubkey: %w", err)
+	}
+
+	backupPubKeyBytes, err := hex.DecodeString(backupPubKeyHex)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid backup pubkey: %w", err)
+	}
+
+	scriptBuilder := txscript.NewScriptBuilder()
+	scriptBuilder.AddOp(txscript.OP_IF)
+	scriptBuilder.AddData(primaryPubKeyBytes)
+	scriptBuilder.AddOp(txscript.OP_CHECKSIGVERIFY)
+	scriptBuilder.AddData(tag)
+	scriptBuilder.AddOp(txscript.OP_ELSE)
+	scriptBuilder.AddInt64(csvBlocks)
+	scriptBuilder.AddOp(txscript.OP_CHECKSEQUENCEVERIFY)
+	scriptBuilder.AddOp(txscript.OP_DROP)
+	scriptBuilder.AddData(backupPubKeyBytes)
+	scriptBuilder.AddOp(txscript.OP_CHECKSIG)
+	scriptBuilder.AddOp(txscript.OP_ENDIF)
+
+	script, err := scriptBuilder.Script()
+	if err != nil {
+		return "", nil, err
+	}
+
+	witnessProgram := sha256.Sum256(script)
+	addressWitnessScriptHash, err := btcutil.NewAddressWitnessScriptHash(witnessProgram[:], network)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return addressWitnessScriptHash.EncodeAddress(), script, nil
+}
+
 func CreateMultipleExamples() {
 	pubKey := "0242f9da15eae56fe6aca65136738905c0afdb2c4edf379e107b3b00b98c7fc9f0"
 	tag := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"

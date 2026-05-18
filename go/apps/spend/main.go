@@ -6,33 +6,48 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/miloridenour/vsc-scripts/packages/createaddress"
-	"github.com/miloridenour/vsc-scripts/packages/httptransport"
 	"github.com/miloridenour/vsc-scripts/packages/inputconfig"
 	"github.com/miloridenour/vsc-scripts/packages/mempool"
 	"github.com/miloridenour/vsc-scripts/packages/transactions"
 )
 
-type signerConfig struct {
-	PrivateKey  string            `json:"private_key"`
-	PubKey      string            `json:"public_key"`
-	Instruction string            `json:"deposit_instruction"`
-	SendAddress string            `json:"send_address"`
-	Utxo        transactions.Utxo `json:"utxo"`
-	SendAmount  int64             `json:"send_amount"`
-	FeeAmount   int64             `json:"fee_amount"`
+type spendConfig struct {
+	BackupPrivateKey string `json:"backup_private_key"`
+	PrimaryPubKey    string `json:"primary_pub_key"`
+	BackupPubKey     string `json:"backup_pub_key"`
+	Instruction      string `json:"instruction"`
+	CsvBlocks        int64  `json:"csv_blocks"`
+	TxId             string `json:"txid"`
+	Vout             uint32 `json:"vout"`
+	SendAddress      string `json:"send_address"`
+	SendAmount       int64  `json:"send_amount"`
+	FeeAmount        int64  `json:"fee_amount"`
+	DeductFee        bool   `json:"deduct_fee"`
 }
 
 func main() {
 	noBroadcast := flag.Bool("nobroadcast", false, "prevents transaction from being broadcast to the bitcoin network")
+	networkFlag := flag.String("network", "testnet4", "bitcoin network (mainnet, testnet, testnet4)")
 	flag.Parse()
 
-	network := &chaincfg.TestNet4Params
+	var network *chaincfg.Params
+	switch *networkFlag {
+	case "mainnet":
+		network = &chaincfg.MainNetParams
+	case "testnet":
+		network = &chaincfg.TestNet3Params
+	case "testnet4":
+		network = &chaincfg.TestNet4Params
+	default:
+		log.Fatalf("unknown network: %s (use mainnet, testnet, or testnet4)", *networkFlag)
+	}
 
-	var signerConfig signerConfig
-	err := inputconfig.LoadConfig(&signerConfig)
+	var cfg spendConfig
+	err := inputconfig.LoadConfig(&cfg)
 	if err != nil {
 		if err == inputconfig.ErrConfigNotFound {
 			fmt.Printf("config file created\n")
@@ -41,44 +56,93 @@ func main() {
 		log.Fatalf("error loading config: %s", err.Error())
 	}
 
+	// Fetch UTXO details from mempool.space
+	mempoolClient := mempool.NewMempoolClient(&http.Client{}, mempool.BaseURLForNetwork(*networkFlag))
+	txInfo, err := mempoolClient.GetTx(cfg.TxId)
+	if err != nil {
+		log.Fatalf("error fetching tx from mempool: %s", err.Error())
+	}
+
+	if int(cfg.Vout) >= len(txInfo.Vout) {
+		log.Fatalf("vout index %d out of range (tx has %d outputs)", cfg.Vout, len(txInfo.Vout))
+	}
+
+	utxoAmount := txInfo.Vout[cfg.Vout].Value
+	log.Printf("UTXO %s:%d — %d sats", cfg.TxId, cfg.Vout, utxoAmount)
+
+	// Build the witness script tag from the instruction
 	var tag []byte
-	if len(signerConfig.Instruction) > 0 {
+	if len(cfg.Instruction) > 0 {
 		hasher := sha256.New()
-		hasher.Write([]byte(signerConfig.Instruction))
+		hasher.Write([]byte(cfg.Instruction))
 		tag = hasher.Sum(nil)
 	} else {
 		tag = nil
 	}
 
-	myAddress, witnessScript, err := createaddress.CreateP2WSHAddress(signerConfig.PubKey, tag, network)
+	// Create the P2WSH address with primary + backup paths
+	myAddress, witnessScript, err := createaddress.CreateP2WSHAddressWithBackup(
+		cfg.PrimaryPubKey, cfg.BackupPubKey, tag, cfg.CsvBlocks, network,
+	)
 	if err != nil {
 		log.Fatalf("error creating P2WSH address: %s", err)
 	}
 
-	log.Printf("Sending From Address: %s\n", myAddress)
+	log.Printf("Spending From Address: %s", myAddress)
 
-	tx, sigHash, err := transactions.CreateSpendTransaction(
-		&signerConfig.Utxo,
+	// Calculate destination and change amounts based on fee mode
+	var destAmount, feeAmount int64
+	feeAmount = cfg.FeeAmount
+
+	if cfg.DeductFee {
+		// Fee is deducted from the send amount: receiver gets (send - fee)
+		destAmount = cfg.SendAmount - feeAmount
+		if destAmount <= 0 {
+			log.Fatalf("send_amount (%d) must be greater than fee_amount (%d) in deduct_fee mode", cfg.SendAmount, feeAmount)
+		}
+	} else {
+		// Fee is on top: receiver gets the full send amount
+		destAmount = cfg.SendAmount
+	}
+
+	utxo := &transactions.Utxo{
+		TxId:   cfg.TxId,
+		Vout:   cfg.Vout,
+		Amount: utxoAmount,
+	}
+
+	// The change goes back to the same address
+	// In deduct mode: change = utxo - sendAmount
+	// In on-top mode: change = utxo - sendAmount - fee
+	var changeFee int64
+	if cfg.DeductFee {
+		changeFee = 0 // fee already deducted from destAmount
+	} else {
+		changeFee = feeAmount
+	}
+
+	tx, sigHash, err := transactions.CreateBackupSpendTransaction(
+		utxo,
 		witnessScript,
-		signerConfig.SendAddress,
+		cfg.SendAddress,
 		myAddress,
-		signerConfig.SendAmount, // amount to send
-		signerConfig.FeeAmount,
+		destAmount,
+		changeFee,
+		cfg.CsvBlocks,
 		network,
 	)
-
 	if err != nil {
-		log.Fatalf("%s", err.Error())
+		log.Fatalf("error creating transaction: %s", err.Error())
 	}
 
 	log.Printf("sigHash to sign: %x", sigHash)
 
-	signature, err := transactions.SignTxBytes(signerConfig.PrivateKey, sigHash)
+	signature, err := transactions.SignTxBytes(cfg.BackupPrivateKey, sigHash)
 	if err != nil {
 		log.Fatalf("error signing: %s", err.Error())
 	}
 
-	txPairOut, err := transactions.AttachSignature(tx, witnessScript, signature)
+	txPairOut, err := transactions.AttachBackupSignature(tx, witnessScript, signature)
 	if err != nil {
 		log.Fatalf("error attaching signature: %s", err.Error())
 	}
@@ -89,11 +153,12 @@ func main() {
 	}
 
 	fmt.Println(string(outputJson))
-	// braodcast at: https://blockstream.info/testnet/tx/push
 
 	if !*noBroadcast {
-		loggingClient := httptransport.NewLoggingClient()
-		mempoolClient := mempool.NewMempoolClient(loggingClient)
-		mempoolClient.PostTx(txPairOut.RawTx)
+		err = mempoolClient.PostTx(txPairOut.RawTx)
+		if err != nil {
+			log.Fatalf("error broadcasting: %s", err.Error())
+		}
+		log.Printf("Transaction broadcast successfully: %s", txPairOut.TxId)
 	}
 }
