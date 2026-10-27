@@ -1,0 +1,15 @@
+{
+  "net_id": "vsc-mainnet",
+  "caller": "hive:vsc.dao",
+  "contract_id": "vsc1Brvi4YZHLkocYNAFd7Gf1JpsPjzNnv4i45",
+  "action": "register_token",
+  "payload": {
+    "name": "LASSECASH",
+    "chain": "MAGI",
+    "mapping_contract": "vsc1BUDsVccMPGycTmpc98WsQYSKyTBsZqFq4h",
+    "decimals": 8,
+    "description": "LasseCash"
+  },
+  "rc_limit": 10000,
+  "intents": []
+}

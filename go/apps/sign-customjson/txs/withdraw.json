@@ -1,0 +1,8 @@
+{
+  "from": "hive:vsc.dao",
+  "to": "hive:vsc.dao",
+  "asset": "hbd",
+  "net_id": "vsc-mainnet",
+  "amount": "10.000",
+  "memo": "withdraw to mainnet to allow new contract deployment"
+}

@@ -1,0 +1,13 @@
+{
+  "net_id": "vsc-mainnet",
+  "caller": "hive:vsc.dao",
+  "contract_id": "vsc1Brvi4YZHLkocYNAFd7Gf1JpsPjzNnv4i45",
+  "action": "register_pool",
+  "payload": {
+    "asset0": "LASSECASH",
+    "asset1": "HBD",
+    "dex_contract_id": "vsc1BrBFAwZ3Mr8L4ijRqT9RPEPvhK9FWDaYSr"
+  },
+  "rc_limit": 10000,
+  "intents": []
+}

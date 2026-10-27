@@ -1,0 +1,9 @@
+{
+  "net_id": "vsc-mainnet",
+  "caller": "hive:vsc.dao",
+  "contract_id": "vsc1BdZFXb8HdLptKUamNG4nL74hSb6UUBEiQA",
+  "action": "init",
+  "payload": { "feeBps": 0, "feeRecipient": "hive:vsc.dao" },
+  "rc_limit": 10000,
+  "intents": []
+}

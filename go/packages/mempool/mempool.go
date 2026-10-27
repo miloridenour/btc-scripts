@@ -80,6 +80,47 @@ func (m *MempoolClient) GetTx(txid string) (*TxInfo, error) {
 	return &txInfo, nil
 }
 
+// GetBlockHashAtHeight returns the block hash at the given height.
+func (m *MempoolClient) GetBlockHashAtHeight(height uint32) (string, error) {
+	url := fmt.Sprintf("%s/block-height/%d", m.baseURL, height)
+	resp, err := m.client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch block hash at height %d: %w", height, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read block hash response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("mempool API returned %d for height %d: %s", resp.StatusCode, height, string(body))
+	}
+
+	return string(body), nil
+}
+
+// GetBlockHeader returns the hex-encoded 80-byte header for the block with the
+// given hash, exactly as served by mempool.space (no separator, lowercase hex).
+func (m *MempoolClient) GetBlockHeader(hash string) (string, error) {
+	url := fmt.Sprintf("%s/block/%s/header", m.baseURL, hash)
+	resp, err := m.client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch block header for %s: %w", hash, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read block header response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("mempool API returned %d for block %s: %s", resp.StatusCode, hash, string(body))
+	}
+
+	return string(body), nil
+}
+
 func (m *MempoolClient) PostTx(rawTx string) error {
 	url := fmt.Sprintf("%s/tx", m.baseURL)
 	resp, err := m.client.Post(url, "text/plain", bytes.NewReader([]byte(rawTx)))
